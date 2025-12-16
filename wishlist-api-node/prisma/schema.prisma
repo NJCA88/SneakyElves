@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  email     String     @unique
+  name      String
+  password  String
+  isAdmin   Boolean    @default(false)
+  profilePictureUrl String?
+  groupId   Int? // Deprecated: Use memberships instead
+  group     Group?     @relation(fields: [groupId], references: [id])
+  memberships GroupMembership[]
+  wishlists Wishlist[]
+  secretSantaGiving SecretSanta[] @relation("SecretSantaGiver")
+  secretSantaReceiving SecretSanta[] @relation("SecretSantaReceiver")
+  notifications Notification[]
+  feedItems     FeedItem[] @relation("FeedRecipient")
+  feedActions   FeedItem[] @relation("FeedActor")
+
+  // Messaging
+  conversationsStarted Conversation[] @relation("ConversationAuthor")
+  messagesSent         Message[]      @relation("MessageAuthor")
+}
+
+model FeedItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int      // Recipient
+  actorId   Int      // The user who PERFORMED the action
+  type      String   // e.g., "ITEM_ADDED", "PURCHASED", "JOINED_GROUP"
+  data      String   // JSON string
+  relatedId Int?     // Optional ID link
+  createdAt DateTime @default(now())
+
+  actor     User     @relation("FeedActor", fields: [actorId], references: [id])
+  user      User     @relation("FeedRecipient", fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      // Recipient
+  user      User     @relation(fields: [userId], references: [id])
+  type      String   // e.g., "ITEM_PURCHASED", "GROUP_INVITE", "SYSTEM"
+  message   String
+  link      String?  // Optional URL to redirect to (e.g., "/wishlist/1")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model GroupMembership {
+  id      Int    @id @default(autoincrement())
+  userId  Int
+  groupId Int
+  role    String @default("MEMBER") // "MEMBER", "ADMIN"
+  user    User   @relation(fields: [userId], references: [id])
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+}
+
+model Group {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  inviteCode String  @unique @default("TEMP")
+  memberships GroupMembership[]
+  users     User[] // Deprecated: Use memberships instead
+  createdAt DateTime @default(now())
+}
+
+model Wishlist {
+  id        Int      @id @default(autoincrement())
+  title     String
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  items     Item[]
+  conversations Conversation[]
+  generalInstructions String?
+  createdAt DateTime @default(now())
+}
+
+model Item {
+  id          Int      @id @default(autoincrement())
+  name        String
+  url         String?
+  imageUrl    String?
+  price       Float?
+  note        String?
+  rank        Int      @default(0)
+  purchased   Boolean  @default(false)
+  wishlistId  Int
+  wishlist    Wishlist @relation(fields: [wishlistId], references: [id])
+  purchasedBy Int?
+  conversations Conversation[]
+}
+
+model SecretSanta {
+  id         Int      @id @default(autoincrement())
+  giverId    Int
+  receiverId Int
+  receiver   User     @relation("SecretSantaReceiver", fields: [receiverId], references: [id])
+  giver      User     @relation("SecretSantaGiver", fields: [giverId], references: [id])
+  role       String   // "santa" or "elf"
+  year       Int
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  
+  @@unique([giverId, receiverId, year, role])
+}
+
+model AppConfig {
+  key   String @id
+  value String
+}
+
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  wishlistId Int
+  itemId    Int?
+  authorId  Int      // The Asker
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wishlist  Wishlist @relation(fields: [wishlistId], references: [id])
+  item      Item?    @relation(fields: [itemId], references: [id])
+  author    User     @relation("ConversationAuthor", fields: [authorId], references: [id])
+  messages  Message[]
+  
+  @@index([wishlistId])
+  @@index([authorId])
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  authorId       Int
+  body           String
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author         User         @relation("MessageAuthor", fields: [authorId], references: [id])
+}
