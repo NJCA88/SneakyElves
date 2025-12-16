@@ -58,25 +58,64 @@ export default function Dashboard() {
         }
     };
 
+    const scrollToSection = (id) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth' });
+        }
+    };
+
     const myWishlist = wishlists.find(w => w.userId === user?.id);
     const otherWishlists = wishlists.filter(w => w.userId !== user?.id);
+    const hasSecretSanta = user && (secretSantaAssignment?.santa || secretSantaAssignment?.elves?.length > 0);
 
     return (
         <div className="max-w-6xl mx-auto space-y-12">
             {/* News Feed Section */}
             {user && (
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <Activity className="text-indigo-600" />
-                        Activity Feed
-                    </h2>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-start gap-6 mb-6">
+                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                            <Activity className="text-indigo-600" />
+                            Activity Feed
+                        </h2>
+
+                        {/* Quick Navigation Links */}
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={() => scrollToSection('my-wishlist')}
+                                className="px-3 py-1.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all shadow-sm flex items-center gap-1.5"
+                            >
+                                <Gift size={16} className="text-indigo-500" />
+                                My Wishlist
+                            </button>
+
+                            {hasSecretSanta && (
+                                <button
+                                    onClick={() => scrollToSection('secret-santa')}
+                                    className="px-3 py-1.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-all shadow-sm flex items-center gap-1.5"
+                                >
+                                    <Snowflake size={16} className="text-red-500" />
+                                    Secret Santa
+                                </button>
+                            )}
+
+                            <button
+                                onClick={() => scrollToSection('community-wishlists')}
+                                className="px-3 py-1.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all shadow-sm flex items-center gap-1.5"
+                            >
+                                <Gift size={16} className="text-purple-500" />
+                                Community
+                            </button>
+                        </div>
+                    </div>
                     <NewsFeed />
                 </div>
             )}
 
             {/* My Wishlist Section */}
             {user && (
-                <div>
+                <div id="my-wishlist" className="scroll-mt-24">
                     <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
                         <Gift className="text-indigo-600" />
                         My Wishlist
@@ -157,7 +196,7 @@ export default function Dashboard() {
 
             {/* Secret Santa Section */}
             {user && (secretSantaAssignment?.santa || secretSantaAssignment?.elves?.length > 0) && (
-                <div className="bg-gradient-to-br from-red-50 to-green-50 rounded-3xl p-8 border-2 border-red-200 shadow-sm">
+                <div id="secret-santa" className="bg-gradient-to-br from-red-50 to-green-50 rounded-3xl p-8 border-2 border-red-200 shadow-sm scroll-mt-24">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="bg-red-600 p-3 rounded-xl">
                             <Snowflake className="text-white" size={28} />
@@ -243,7 +282,7 @@ export default function Dashboard() {
 
 
             {/* Community Wishlists Section */}
-            <div>
+            <div id="community-wishlists" className="scroll-mt-24">
                 <h2 className="text-2xl font-bold text-slate-800 mb-6">Community Wishlists</h2>
                 {otherWishlists.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
