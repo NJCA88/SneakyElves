@@ -12,6 +12,7 @@ model User {
   email     String     @unique
   name      String
   password  String
+  googleId  String?    @unique
   isAdmin   Boolean    @default(false)
   profilePictureUrl String?
   groupId   Int? // Deprecated: Use memberships instead
@@ -23,6 +24,10 @@ model User {
   notifications Notification[]
   feedItems     FeedItem[] @relation("FeedRecipient")
   feedActions   FeedItem[] @relation("FeedActor")
+
+  // Messaging
+  conversationsStarted Conversation[] @relation("ConversationAuthor")
+  messagesSent         Message[]      @relation("MessageAuthor")
 }
 
 model FeedItem {
@@ -71,6 +76,7 @@ model Group {
   memberships GroupMembership[]
   users     User[] // Deprecated: Use memberships instead
   createdAt DateTime @default(now())
+  wishlistInvites WishlistInvite[]
 }
 
 model Wishlist {
@@ -79,8 +85,23 @@ model Wishlist {
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   items     Item[]
+  conversations Conversation[]
   generalInstructions String?
+  shareToken String? @unique
+  invites    WishlistInvite[]
   createdAt DateTime @default(now())
+}
+
+model WishlistInvite {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  wishlistId Int
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id])
+  
+  // Implicit many-to-many relation to Group
+  groups     Group[]
+  
+  createdAt  DateTime @default(now())
 }
 
 model Item {
@@ -95,19 +116,19 @@ model Item {
   wishlistId  Int
   wishlist    Wishlist @relation(fields: [wishlistId], references: [id])
   purchasedBy Int?
+  conversations Conversation[]
 }
 
 model SecretSanta {
   id         Int      @id @default(autoincrement())
   giverId    Int
   receiverId Int
+  receiver   User     @relation("SecretSantaReceiver", fields: [receiverId], references: [id])
+  giver      User     @relation("SecretSantaGiver", fields: [giverId], references: [id])
   role       String   // "santa" or "elf"
   year       Int
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
-  
-  giver      User     @relation("SecretSantaGiver", fields: [giverId], references: [id])
-  receiver   User     @relation("SecretSantaReceiver", fields: [receiverId], references: [id])
   
   @@unique([giverId, receiverId, year, role])
 }
@@ -115,4 +136,32 @@ model SecretSanta {
 model AppConfig {
   key   String @id
   value String
+}
+
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  wishlistId Int
+  itemId    Int?
+  authorId  Int      // The Asker
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wishlist  Wishlist @relation(fields: [wishlistId], references: [id])
+  item      Item?    @relation(fields: [itemId], references: [id])
+  author    User     @relation("ConversationAuthor", fields: [authorId], references: [id])
+  messages  Message[]
+  
+  @@index([wishlistId])
+  @@index([authorId])
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  authorId       Int
+  body           String
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author         User         @relation("MessageAuthor", fields: [authorId], references: [id])
 }

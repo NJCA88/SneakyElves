@@ -12,6 +12,7 @@ model User {
   email     String     @unique
   name      String
   password  String
+  googleId  String?    @unique
   isAdmin   Boolean    @default(false)
   profilePictureUrl String?
   groupId   Int? // Deprecated: Use memberships instead
@@ -75,6 +76,7 @@ model Group {
   memberships GroupMembership[]
   users     User[] // Deprecated: Use memberships instead
   createdAt DateTime @default(now())
+  wishlistInvites WishlistInvite[]
 }
 
 model Wishlist {
@@ -85,7 +87,21 @@ model Wishlist {
   items     Item[]
   conversations Conversation[]
   generalInstructions String?
+  shareToken String? @unique
+  invites    WishlistInvite[]
   createdAt DateTime @default(now())
+}
+
+model WishlistInvite {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  wishlistId Int
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id])
+  
+  // Implicit many-to-many relation to Group
+  groups     Group[]
+  
+  createdAt  DateTime @default(now())
 }
 
 model Item {

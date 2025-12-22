@@ -1,0 +1,10 @@
+[dotenv@17.2.3] injecting env (2) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+Server running on http://0.0.0.0:3000
+Login attempt for: admin@example.com
+Password mismatch
+Login attempt for: admin@example.com
+Password mismatch
+Login attempt for: test@example.com
+User not found
+Login attempt for: test@example.com
+User not found

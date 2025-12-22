@@ -4,7 +4,8 @@ import axios from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { addAffiliateTag } from '../utils/affiliate';
 
-import { ArrowLeft, Check, Plus, ShoppingBag, ExternalLink, Trash2, Edit2, X, Gift, GripVertical, MessageCircle, Mail } from 'lucide-react';
+import { ArrowLeft, Check, Plus, ShoppingBag, ExternalLink, Trash2, Edit2, X, Gift, GripVertical, MessageCircle, Mail, Share2, Link as LinkIcon, Copy, Lock } from 'lucide-react';
+
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import QuestionModal from '../components/QuestionModal';
 import ConversationModal from '../components/ConversationModal';
@@ -12,7 +13,8 @@ import ConversationModal from '../components/ConversationModal';
 export default function WishlistDetail() {
     const { id } = useParams();
     const [wishlist, setWishlist] = useState(null);
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth(); // Assume useAuth provides 'loading'
+
     const [newItem, setNewItem] = useState({ name: '', price: '', url: '', note: '' });
     const [editingItem, setEditingItem] = useState(null);
     const [editData, setEditData] = useState({ name: '', price: '', url: '', note: '' });
@@ -27,22 +29,51 @@ export default function WishlistDetail() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSendingReply, setIsSendingReply] = useState(false);
 
+    // Share Modal
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [shareToken, setShareToken] = useState(null);
+    const [shareUrl, setShareUrl] = useState('');
+
+    const location = useLocation();
+
     const fetchWishlist = useCallback(() => {
+        const params = new URLSearchParams(location.search);
+        const tokenFromUrl = params.get('shareToken');
+
+        console.log('[DEBUG] fetchWishlist', {
+            id,
+            authLoading,
+            userId: user?.id,
+            tokenFromUrl
+        });
+
+        // If we are still determining auth state, and we DON'T have a token, we should wait.
+        if (authLoading && !tokenFromUrl) {
+            console.log('[DEBUG] Waiting for auth...');
+            return;
+        }
+
         axios.get(`/api/wishlists/${id}`, {
-            params: { viewerId: user?.id }
+            params: {
+                viewerId: user?.id,
+                shareToken: tokenFromUrl
+            }
         })
             .then(res => {
+                console.log('[DEBUG] fetchWishlist success', res.data);
                 setWishlist(res.data);
                 setInstructions(res.data.generalInstructions || '');
             })
-            .catch(err => console.error(err));
-    }, [id, user?.id]);
+            .catch(err => {
+                console.error('[DEBUG] fetchWishlist failed', err);
+            });
+    }, [id, user?.id, location.search, authLoading]);
 
     useEffect(() => {
         fetchWishlist();
     }, [fetchWishlist]);
 
-    const location = useLocation();
+
 
     useEffect(() => {
         if (wishlist && location.hash) {
@@ -250,6 +281,25 @@ export default function WishlistDetail() {
         }
     };
 
+    const handleShare = async () => {
+        setIsShareModalOpen(true);
+        if (shareToken) return; // Already have it
+
+        try {
+            const res = await axios.post(`/api/wishlists/${id}/share`, { userId: user.id });
+            const token = res.data.shareToken;
+            setShareToken(token);
+            setShareUrl(`${window.location.origin}/wishlists/${id}?shareToken=${token}`);
+        } catch (err) {
+            console.error('Failed to generate share link', err);
+        }
+    };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(shareUrl);
+        alert('Copied to clipboard!');
+    };
+
     if (!wishlist) return (
         <div className="flex justify-center items-center min-h-[50vh]">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -288,6 +338,19 @@ export default function WishlistDetail() {
                                 <span className="font-medium">Curated by</span>
                                 <span className="font-bold text-indigo-700">{wishlist.user?.name}</span>
                             </div>
+
+
+                            {/* Share Button (Owner Only) */}
+                            {isOwner && (
+                                <div className="mt-4 mb-2 flex flex-wrap gap-2 justify-center sm:justify-start">
+                                    <button
+                                        onClick={handleShare}
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                                    >
+                                        <Share2 size={16} /> Share Wishlist
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Q&A Buttons */}
                             <div className="mt-4 flex flex-wrap gap-2 justify-center sm:justify-start">
@@ -632,26 +695,49 @@ export default function WishlistDetail() {
                                                                             </>
                                                                         )}
                                                                         {!isOwner && (
-                                                                            <button
-                                                                                onClick={() => togglePurchased(item.id, item.purchased)}
-                                                                                className={`
-                                                                                    w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2
-                                                                                    ${item.purchased
-                                                                                        ? 'bg-green-100 text-green-700 border border-green-200 hover:bg-green-200'
-                                                                                        : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm hover:shadow-md'}
-                                                                                `}
-                                                                            >
-                                                                                {item.purchased ? (
-                                                                                    <>
-                                                                                        <Check size={16} /> Purchased
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <>
+                                                                            user ? (
+                                                                                <button
+                                                                                    onClick={() => togglePurchased(item.id, item.purchased)}
+                                                                                    className={`
+                                                                                        w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2
+                                                                                        ${item.purchased
+                                                                                            ? 'bg-green-100 text-green-700 border border-green-200 hover:bg-green-200'
+                                                                                            : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm hover:shadow-md'}
+                                                                                    `}
+                                                                                >
+                                                                                    {item.purchased ? (
+                                                                                        <>
+                                                                                            <Check size={16} /> Purchased
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            Mark as Purchased
+                                                                                        </>
+                                                                                    )}
+                                                                                </button>
+                                                                            ) : (
+                                                                                <div className="relative group">
+                                                                                    <div className="absolute inset-0 bg-white/10 backdrop-blur-[2px] z-10 rounded-xl" />
+                                                                                    <div className="filter blur-[4px] select-none pointer-events-none opacity-50
+                                                                                        w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-medium bg-indigo-600 text-white flex items-center justify-center gap-2
+                                                                                    ">
                                                                                         Mark as Purchased
-                                                                                    </>
-                                                                                )}
-                                                                            </button>
+                                                                                    </div>
+                                                                                    <div className="absolute inset-0 z-20 flex items-center justify-center">
+                                                                                        <Link to={{ pathname: "/signup", search: window.location.search }} className="bg-slate-900/90 hover:bg-black text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 transition-transform transform group-hover:scale-105">
+                                                                                            <Lock size={12} /> Login to Claim
+                                                                                        </Link>
+                                                                                    </div>
+
+                                                                                    {/* Hover Tooltip */}
+                                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-slate-900 text-white text-xs p-3 rounded-xl text-center opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-30 shadow-xl translate-y-2 group-hover:translate-y-0">
+                                                                                        Some items are already purchased. Login to see accurate availability and avoid duplicates!
+                                                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
                                                                         )}
+
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -684,6 +770,192 @@ export default function WishlistDetail() {
                 onReply={handleReply}
                 isSending={isSendingReply}
             />
-        </div >
+
+            {/* Share Modal */}
+            {isShareModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-xl relative animate-in fade-in zoom-in duration-200">
+                        <button
+                            onClick={() => setIsShareModalOpen(false)}
+                            className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <div className="text-center mb-6">
+                            <div className="mx-auto w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4">
+                                <Share2 size={24} />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900">Share your Wishlist</h3>
+                            <p className="text-slate-500 mt-2 text-sm">Send a link to friends so they can see what you want!</p>
+                        </div>
+
+                        <ShareModalContent
+                            wishlistId={id}
+                            userId={user.id}
+                            existingShareToken={shareToken}
+                            onInitialShareUrl={(url) => setShareUrl(url)}
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// Sub-component for Share Modal Logic to avoid cluttering main component
+function ShareModalContent({ wishlistId, userId, existingShareToken, onInitialShareUrl }) {
+    // Mode: 'simple' (just view) or 'invite' (adds to groups)
+    const [mode, setMode] = useState('invite'); // Default to invite
+    const [myGroups, setMyGroups] = useState([]);
+    const [selectedGroups, setSelectedGroups] = useState(['new']); // Default select "new"
+    const [generatedUrl, setGeneratedUrl] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        // Fetch user's groups
+        axios.get(`/api/dashboard/${userId}`)
+            .then(res => {
+                const groups = res.data.memberships.map(m => m.group);
+                // Add the special "New Group" option at the start
+                const options = [
+                    { id: 'new', name: 'New group (Just me created now)' },
+                    ...groups
+                ];
+                setMyGroups(options);
+            })
+            .catch(err => console.error("Failed to fetch groups", err));
+
+        // Initial setup doesn't auto-generate invalid link if defaulting to invite mode
+        // But if we want to show existing simple share, we can load it if mode toggles.
+    }, [userId]);
+
+    const handleCreateLink = async () => {
+        setLoading(true);
+        try {
+            if (mode === 'simple') {
+                // Legacy simple share
+                const res = await axios.post(`/api/wishlists/${wishlistId}/share`, { userId });
+                const token = res.data.shareToken;
+                setGeneratedUrl(`${window.location.origin}/wishlists/${wishlistId}?shareToken=${token}`);
+                onInitialShareUrl(`${window.location.origin}/wishlists/${wishlistId}?shareToken=${token}`); // Callback to parent
+            } else {
+                // Smart Invite with Groups
+                const createNewGroup = selectedGroups.includes('new');
+                const groupIdsToConnect = selectedGroups.filter(id => id !== 'new');
+
+                const res = await axios.post(`/api/wishlists/${wishlistId}/invites`, {
+                    userId,
+                    groupIds: groupIdsToConnect,
+                    createNewGroup
+                });
+                const token = res.data.token;
+                setGeneratedUrl(`${window.location.origin}/wishlists/${wishlistId}?shareToken=${token}`);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to create link");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const toggleGroup = (groupId) => {
+        if (selectedGroups.includes(groupId)) {
+            setSelectedGroups(selectedGroups.filter(id => id !== groupId));
+        } else {
+            setSelectedGroups([...selectedGroups, groupId]);
+        }
+    };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(generatedUrl);
+        alert('Copied to clipboard!');
+    };
+
+    return (
+        <div>
+            {/* Tabs */}
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+                <button
+                    onClick={() => { setMode('invite'); setGeneratedUrl(''); setSelectedGroups(['new']); }}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${mode === 'invite' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    View and Invite
+                </button>
+                <button
+                    onClick={() => { setMode('simple'); setGeneratedUrl(''); setSelectedGroups([]); }}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${mode === 'simple' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    Public View
+                </button>
+            </div>
+
+            {mode === 'simple' ? (
+                <div className="text-sm text-slate-600 mb-4 px-2">
+                    <p>Create a link for anyone to view your list. They can mark items as purchased, but won't join your permanent groups.</p>
+                </div>
+            ) : (
+                <div className="mb-4">
+                    <p className="text-sm text-slate-600 mb-3 px-2">When new users register through this link, they will <strong>automatically join</strong> the selected groups:</p>
+                    <div className="max-h-40 overflow-y-auto space-y-2 mb-4 p-2 border border-slate-100 rounded-xl bg-slate-50">
+                        {myGroups.map(group => (
+                            <label key={group.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-indigo-300 transition-colors">
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedGroups.includes(group.id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
+                                    {selectedGroups.includes(group.id) && <Check size={12} />}
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    className="hidden"
+                                    checked={selectedGroups.includes(group.id)}
+                                    onChange={() => toggleGroup(group.id)}
+                                />
+                                <span className={`text-sm font-medium ${group.id === 'new' ? 'text-indigo-700 font-bold' : 'text-slate-700'}`}>
+                                    {group.id === 'new' ? "New group with just me" : group.name}
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {!generatedUrl ? (
+                <button
+                    onClick={handleCreateLink}
+                    disabled={mode === 'invite' && selectedGroups.length === 0}
+                    className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm shadow-indigo-200"
+                >
+                    {loading ? 'Generating...' : (mode === 'simple' ? 'Create Public Link' : 'Create Invite Link')}
+                </button>
+            ) : (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <LinkIcon size={14} className="text-slate-400" />
+                            <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">
+                                {mode === 'simple' ? 'Public Link' : 'Invite Link'}
+                            </span>
+                        </div>
+                        <div className="break-all text-sm font-medium text-slate-800 font-mono bg-white p-3 rounded-lg border border-slate-200 mb-3 shadow-inner">
+                            {generatedUrl}
+                        </div>
+                        <button
+                            onClick={copyToClipboard}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+                        >
+                            <Copy size={16} /> Copy Link
+                        </button>
+                    </div>
+                    <button
+                        onClick={() => setGeneratedUrl('')}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline w-full text-center"
+                    >
+                        Create a different link
+                    </button>
+                    <div className="text-center mt-4">
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

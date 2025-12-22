@@ -21,7 +21,7 @@ export default function Navbar() {
                                 <Gift size={20} />
                             </div>
                             <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-                                Wishlist
+                                SneakyElves
                             </span>
                         </Link>
 

@@ -1,0 +1,4 @@
+[dotenv@17.2.3] injecting env (2) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+Server running on http://0.0.0.0:3000
+Login attempt for: admin@example.com
+Password mismatch

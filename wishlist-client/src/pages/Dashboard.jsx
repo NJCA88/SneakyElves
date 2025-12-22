@@ -71,23 +71,25 @@ export default function Dashboard() {
 
     return (
         <div className="max-w-6xl mx-auto space-y-12">
-            {/* News Feed Section */}
+
+
+            {/* My Wishlist Section */}
             {user && (
-                <div>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-start gap-6 mb-6">
+                <div id="my-wishlist" className="scroll-mt-24">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                            <Activity className="text-indigo-600" />
-                            Activity Feed
+                            <Gift className="text-indigo-600" />
+                            My Wishlist
                         </h2>
 
                         {/* Quick Navigation Links */}
                         <div className="flex flex-wrap gap-2">
                             <button
-                                onClick={() => scrollToSection('my-wishlist')}
-                                className="px-3 py-1.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all shadow-sm flex items-center gap-1.5"
+                                onClick={() => scrollToSection('activity-feed')}
+                                className="px-3 py-1.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-all shadow-sm flex items-center gap-1.5"
                             >
-                                <Gift size={16} className="text-indigo-500" />
-                                My Wishlist
+                                <Activity size={16} className="text-blue-500" />
+                                Activity Feed
                             </button>
 
                             {hasSecretSanta && (
@@ -109,17 +111,6 @@ export default function Dashboard() {
                             </button>
                         </div>
                     </div>
-                    <NewsFeed />
-                </div>
-            )}
-
-            {/* My Wishlist Section */}
-            {user && (
-                <div id="my-wishlist" className="scroll-mt-24">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <Gift className="text-indigo-600" />
-                        My Wishlist
-                    </h2>
                     {loading ? (
                         <div className="animate-pulse bg-white rounded-2xl p-8 shadow-lg border border-slate-100 h-64 flex flex-col justify-between">
                             <div className="flex items-start justify-between mb-6">
@@ -191,6 +182,19 @@ export default function Dashboard() {
                             </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* News Feed Section */}
+            {user && (
+                <div id="activity-feed" className="scroll-mt-24">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-start gap-6 mb-6">
+                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                            <Activity className="text-indigo-600" />
+                            Activity Feed
+                        </h2>
+                    </div>
+                    <NewsFeed />
                 </div>
             )}
 

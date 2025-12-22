@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 require('dotenv').config();
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
@@ -6,6 +7,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const bcrypt = require('bcryptjs');
 const FeedService = require('./services/FeedService');
+const { OAuth2Client } = require('google-auth-library');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -46,6 +48,222 @@ app.get('/api/feed', async (req, res) => {
 });
 
 // Auth Routes
+// Auth Routes
+app.post('/api/auth/google', async (req, res) => {
+    const { token, inviteCode, inviteToken } = req.body;
+    // Warn if ID is missing but proceed (will fail if client tries to verify)
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        console.error('GOOGLE_CLIENT_ID is not set in environment variables');
+    }
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+    try {
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        // sub is the unique Google ID
+        const { sub: googleId, email, name, picture } = payload;
+
+        // 1. Check if user exists by googleId
+        let user = await prisma.user.findUnique({
+            where: { googleId },
+            include: {
+                memberships: {
+                    include: { group: true }
+                }
+            }
+        });
+
+        // 2. If not found by googleId, check by email (legacy user or first time google login)
+        if (!user) {
+            user = await prisma.user.findUnique({
+                where: { email },
+                include: {
+                    memberships: {
+                        include: { group: true }
+                    }
+                }
+            });
+
+            if (user) {
+                // Link account: Add googleId to existing user
+                user = await prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        googleId,
+                        // Optionally update profile picture if missing
+                        profilePictureUrl: user.profilePictureUrl || picture
+                    },
+                    include: {
+                        memberships: {
+                            include: { group: true }
+                        }
+                    }
+                });
+            } else {
+                // 3. Create new user
+                console.log(`Creating new user from Google: ${email}`);
+
+                // Handle Group Logic (same as Signup)
+                let groupsToJoin = [];
+
+                if (inviteCode) {
+                    const grp = await prisma.group.findUnique({
+                        where: { inviteCode: inviteCode.toUpperCase() }
+                    });
+                    if (grp) groupsToJoin.push(grp);
+                }
+
+                // Check new WishlistInvite token
+                if (inviteToken) {
+                    const invite = await prisma.wishlistInvite.findUnique({
+                        where: { token: inviteToken },
+                        include: { groups: true }
+                    });
+                    if (invite && invite.groups.length > 0) {
+                        groupsToJoin = [...groupsToJoin, ...invite.groups];
+                    }
+                }
+
+                // Generate valid random password (required by schema)
+                const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+                const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+                const newUser = await prisma.user.create({
+                    data: {
+                        name,
+                        email,
+                        password: hashedPassword,
+                        googleId,
+                        profilePictureUrl: picture
+                    }
+                });
+
+                if (groupsToJoin.length > 0) {
+                    // Deduplicate groups
+                    const discreteGroups = Array.from(new Set(groupsToJoin.map(g => g.id)))
+                        .map(id => groupsToJoin.find(g => g.id === id));
+
+                    for (const grp of discreteGroups) {
+                        await prisma.groupMembership.create({
+                            data: {
+                                userId: newUser.id,
+                                groupId: grp.id,
+                                role: 'MEMBER'
+                            }
+                        });
+                    }
+                } else {
+                    // Create new group
+                    let newInviteCode;
+                    let isUnique = false;
+                    while (!isUnique) {
+                        newInviteCode = generateInviteCode();
+                        const existing = await prisma.group.findUnique({ where: { inviteCode: newInviteCode } });
+                        if (!existing) isUnique = true;
+                    }
+
+                    const newGroup = await prisma.group.create({
+                        data: {
+                            name: `${name}'s Group`,
+                            inviteCode: newInviteCode
+                        }
+                    });
+
+                    await prisma.groupMembership.create({
+                        data: {
+                            userId: newUser.id,
+                            groupId: newGroup.id,
+                            role: 'ADMIN'
+                        }
+                    });
+                }
+
+                // Auto-create wishlist
+                await prisma.wishlist.create({
+                    data: {
+                        title: name,
+                        userId: newUser.id
+                    }
+                });
+
+                // Fetch full user for return
+                user = await prisma.user.findUnique({
+                    where: { id: newUser.id },
+                    include: {
+                        memberships: {
+                            include: { group: true }
+                        }
+                    }
+                });
+            }
+        }
+
+        const { password: _, ...userWithoutPassword } = user;
+        // console.log('Google Auth successful for:', email);
+        res.json({ user: userWithoutPassword });
+
+    } catch (error) {
+        console.error('Google Auth Error:', error);
+        res.status(401).json({ error: 'Invalid Google Token' });
+    }
+});
+
+app.post('/api/auth/google/link', async (req, res) => {
+    const { userId, token } = req.body;
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        console.error('GOOGLE_CLIENT_ID is not set in environment variables');
+    }
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+    try {
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        const { sub: googleId, email, picture } = payload;
+
+        // 1. Check if googleId is already used by ANOTHER user
+        const existingUser = await prisma.user.findUnique({
+            where: { googleId }
+        });
+
+        if (existingUser && existingUser.id !== userId) {
+            return res.status(400).json({ error: 'This Google account is already linked to another user.' });
+        }
+
+        // 2. Link the account
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: {
+                googleId,
+                // Optionally fill in profile picture if missing
+                profilePictureUrl: { set: picture } // Actually, let's only set if missing, but Prisma update is simple.
+                // Ideally: profilePictureUrl: user.profilePictureUrl || picture. But we don't have user loaded here effectively unless we fetch.
+                // Let's just update googleId. The user can update profile pic manually if they want, or we can fetch first.
+            },
+            include: {
+                memberships: {
+                    include: { group: true }
+                }
+            }
+        });
+
+        // If profile pic is missing, update it? 
+        // Let's keep it simple for now, just link.
+
+        const { password: _, ...userWithoutPassword } = updatedUser;
+        res.json({ user: userWithoutPassword });
+
+    } catch (error) {
+        console.error('Google Link Error:', error);
+        res.status(401).json({ error: 'Invalid Google Token or Link Failed' });
+    }
+});
+
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     console.log(`Login attempt for: ${email}`);
@@ -100,15 +318,28 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/signup', async (req, res) => {
-    const { name, email, password, inviteCode } = req.body;
+    const { name, email, password, inviteCode, inviteToken } = req.body; // Changed to accept inviteToken too
     try {
         let groupToJoin = null;
+        let groupsToJoin = [];
+
+        // 1. Check legacy invite code
         if (inviteCode) {
-            groupToJoin = await prisma.group.findUnique({
+            const grp = await prisma.group.findUnique({
                 where: { inviteCode: inviteCode.toUpperCase() }
             });
-            if (!groupToJoin) {
-                return res.status(400).json({ error: 'Invalid invite code' });
+            if (grp) groupsToJoin.push(grp);
+            else return res.status(400).json({ error: 'Invalid invite code' });
+        }
+
+        // 2. Check new WishlistInvite token
+        if (inviteToken) {
+            const invite = await prisma.wishlistInvite.findUnique({
+                where: { token: inviteToken },
+                include: { groups: true }
+            });
+            if (invite && invite.groups.length > 0) {
+                groupsToJoin = [...groupsToJoin, ...invite.groups];
             }
         }
 
@@ -117,14 +348,28 @@ app.post('/api/signup', async (req, res) => {
             data: { name, email, password: hashedPassword }
         });
 
-        if (groupToJoin) {
-            await prisma.groupMembership.create({
-                data: {
-                    userId: user.id,
-                    groupId: groupToJoin.id,
-                    role: 'MEMBER'
+        // Add to groups
+        if (groupsToJoin.length > 0) {
+            // Deduplicate groups
+            const discreteGroups = Array.from(new Set(groupsToJoin.map(g => g.id)))
+                .map(id => groupsToJoin.find(g => g.id === id));
+
+            for (const grp of discreteGroups) {
+                // Check if already in group (in case multiple sources added same group)
+                const existing = await prisma.groupMembership.findUnique({
+                    where: { userId_groupId: { userId: user.id, groupId: grp.id } }
+                });
+
+                if (!existing) {
+                    await prisma.groupMembership.create({
+                        data: {
+                            userId: user.id,
+                            groupId: grp.id,
+                            role: 'MEMBER'
+                        }
+                    });
                 }
-            });
+            }
         } else {
             // No invite code provided (or invalid, though we validate above), create a new group for them
             let newInviteCode;
@@ -230,15 +475,143 @@ app.get('/api/wishlists/:id', async (req, res) => {
         return res.status(404).json({ error: 'Wishlist not found' });
     }
 
-    // Secret Santa Logic: If the viewer is the owner, hide purchased status
-    if (viewerId && parseInt(viewerId) === wishlist.userId) {
+    // Access Control Logic
+    const isOwner = viewerId && parseInt(viewerId) === wishlist.userId;
+    const shareToken = req.query.shareToken;
+
+    console.log(`[DEBUG] GET /wishlists/${id}: viewerId=${viewerId}, shareToken=${shareToken}, owner=${wishlist.userId}`);
+
+    // Check if token matches a WishlistInvite
+    let isInviteTokenValid = false;
+    if (shareToken) {
+        // First check standard token
+        if (shareToken === wishlist.shareToken) {
+            isInviteTokenValid = true;
+        } else {
+            // Check invite tokens
+            const invite = await prisma.wishlistInvite.findUnique({
+                where: { token: shareToken }
+            });
+            if (invite && invite.wishlistId === parseInt(id)) {
+                isInviteTokenValid = true;
+            }
+        }
+    }
+
+    // 1. If user is owner, allow full access (and mask purchased status if needed)
+    if (isOwner) {
         wishlist.items = wishlist.items.map(item => ({
             ...item,
-            purchased: false // Mask the purchased status
+            purchased: false // Mask the purchased status so owner doesn't see spoilers
         }));
+    }
+    // 2. If valid share token (Legacy OR New Invite), allow access
+    else if (isInviteTokenValid) {
+        // Allow access
+    }
+    else {
+        // If not owner and no valid token...
+        if (!viewerId) {
+            return res.status(403).json({ error: 'Unauthorized. Please login or use a valid share link.' });
+        }
+        // If viewerId is present, we allow it (Friend/Group logic fallback)
     }
 
     res.json(wishlist);
+});
+
+// Create new Invite Link with Group Selection
+app.post('/api/wishlists/:id/invites', async (req, res) => {
+    const { id } = req.params;
+    const { userId, groupIds, createNewGroup } = req.body;
+
+    try {
+        const wishlist = await prisma.wishlist.findUnique({
+            where: { id: parseInt(id) },
+            include: { user: true }
+        });
+
+        if (!wishlist) return res.status(404).json({ error: 'Not found' });
+        // Ensure accurate type comparison
+        if (wishlist.userId !== parseInt(userId)) return res.status(403).json({ error: 'Unauthorized' });
+
+        const groupsToConnect = [...(groupIds || []).map(gid => ({ id: gid }))];
+
+        // Handle "New Group" creation
+        if (createNewGroup) {
+            let newInviteCode;
+            let isUnique = false;
+            while (!isUnique) {
+                newInviteCode = generateInviteCode();
+                const existing = await prisma.group.findUnique({ where: { inviteCode: newInviteCode } });
+                if (!existing) isUnique = true;
+            }
+
+            // Group names must be unique. Append invite code or random string to ensure it.
+            const uniqueName = `${wishlist.user.name} & Guest (${newInviteCode})`;
+
+            const newGroup = await prisma.group.create({
+                data: {
+                    name: uniqueName,
+                    inviteCode: newInviteCode,
+                    memberships: {
+                        create: {
+                            userId: parseInt(userId),
+                            role: 'ADMIN'
+                        }
+                    }
+                }
+            });
+            groupsToConnect.push({ id: newGroup.id });
+        }
+
+        const newToken = crypto.randomUUID();
+
+        const invite = await prisma.wishlistInvite.create({
+            data: {
+                token: newToken,
+                wishlistId: parseInt(id),
+                groups: {
+                    connect: groupsToConnect
+                }
+            }
+        });
+
+        res.json({ token: invite.token });
+    } catch (error) {
+        console.error('Error creating invite:', error);
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+// Legacy Share Token (Keep for backward compatibility or simple sharing)
+app.post('/api/wishlists/:id/share', async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    try {
+        const wishlist = await prisma.wishlist.findUnique({
+            where: { id: parseInt(id) }
+        });
+
+        if (!wishlist) return res.status(404).json({ error: 'Not found' });
+        if (wishlist.userId !== userId) return res.status(403).json({ error: 'Unauthorized' });
+
+        if (wishlist.shareToken) {
+            return res.json({ shareToken: wishlist.shareToken });
+        }
+
+        const newToken = crypto.randomUUID();
+        const updated = await prisma.wishlist.update({
+            where: { id: parseInt(id) },
+            data: { shareToken: newToken }
+        });
+
+        res.json({ shareToken: updated.shareToken });
+    } catch (error) {
+        console.error('Error generating share token:', error);
+        res.status(500).json({ error: 'Failed' });
+    }
 });
 
 // Dashboard Summary Route

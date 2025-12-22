@@ -63,11 +63,7 @@ function App() {
                       <About />
                     </ProtectedRoute>
                   } />
-                  <Route path="/wishlists/:id" element={
-                    <ProtectedRoute>
-                      <WishlistDetail />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="/wishlists/:id" element={<WishlistDetail />} />
                   <Route path="/settings" element={
                     <ProtectedRoute>
                       <Settings />

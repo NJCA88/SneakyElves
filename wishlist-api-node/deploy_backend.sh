@@ -38,6 +38,6 @@ gcloud run deploy $SERVICE_NAME \
   --min-instances 0 \
   --timeout 300 \
   --cpu-boost \
-  --set-env-vars DATABASE_URL="$DATABASE_URL"
+  --set-env-vars DATABASE_URL="$DATABASE_URL",GOOGLE_CLIENT_ID="496031209257-7kjroq2tihte2mc8a29slolbi75ukcn7.apps.googleusercontent.com"
 
 echo "✅ Deployment complete!"

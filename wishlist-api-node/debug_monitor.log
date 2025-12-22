@@ -1,0 +1,3 @@
+[dotenv@17.2.3] injecting env (2) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+Server running on http://0.0.0.0:3000
+[DEBUG] GET /wishlists/1: viewerId=99, shareToken=undefined, owner=1

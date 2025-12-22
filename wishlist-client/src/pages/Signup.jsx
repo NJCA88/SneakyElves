@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import axios from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { UserPlus } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
 
 export default function Signup() {
     const [name, setName] = useState('');
@@ -11,33 +12,38 @@ export default function Signup() {
     const [error, setError] = useState('');
     const [searchParams] = useSearchParams();
     const [inviteCode, setInviteCode] = useState(searchParams.get('invite') || '');
+    const [inviteToken] = useState(searchParams.get('shareToken') || ''); // Capture token from URL
     const [groupName, setGroupName] = useState(null);
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    useEffect(() => {
-        const checkInvite = async () => {
-            if (inviteCode) {
-                try {
-                    const res = await axios.get(`/api/groups/validate/${inviteCode}`);
-                    if (res.data.valid) {
-                        setGroupName(res.data.groupName);
-                    } else {
-                        setError('Invalid invite link');
-                        setInviteCode('');
-                    }
-                } catch (err) {
-                    console.error('Error validating invite:', err);
-                }
-            }
-        };
-        checkInvite();
-    }, [inviteCode]);
+    const handleGoogleLogin = async (credentialResponse) => {
+        try {
+            const res = await axios.post('/api/auth/google', {
+                token: credentialResponse.credential,
+                inviteCode: inviteCode || undefined,
+                inviteToken: inviteToken || undefined
+            });
+            login(res.data.user);
+            navigate('/');
+        } catch (err) {
+            console.error('Google Signup Error:', err);
+            setError('Google Signup Failed');
+        }
+    };
+
+    // ... (useEffect for existing invite code check)
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post('/api/signup', { name, email, password, inviteCode });
+            const res = await axios.post('/api/signup', {
+                name,
+                email,
+                password,
+                inviteCode,
+                inviteToken
+            });
             login(res.data.user);
             navigate('/');
         } catch (err) {
@@ -125,9 +131,26 @@ export default function Signup() {
 
                 <div className="mt-8 text-center text-sm text-slate-500">
                     Already have an account?{' '}
-                    <Link to="/login" className="text-indigo-600 font-semibold hover:text-indigo-700 hover:underline">
+                    <Link to={{ pathname: '/login', search: window.location.search }} className="text-indigo-600 font-semibold hover:text-indigo-700 hover:underline">
                         Sign in instead
                     </Link>
+                </div>
+                <div className="my-6 flex items-center">
+                    <div className="flex-grow border-t border-slate-200"></div>
+                    <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">Or sign up with</span>
+                    <div className="flex-grow border-t border-slate-200"></div>
+                </div>
+
+                <div className="flex justify-center">
+                    <GoogleLogin
+                        text="signup_with"
+                        onSuccess={handleGoogleLogin}
+                        onError={() => {
+                            console.log('Signup Failed');
+                            setError('Google Signup Failed');
+                        }}
+                        shape="circle"
+                    />
                 </div>
             </div>
         </div>
