@@ -14,7 +14,15 @@ export default function Dashboard() {
     // Still fetching memberships for other purposes if needed, but not displaying invite UI here
     const [memberships, setMemberships] = useState([]);
 
+    // NewsFeed State
+    const [activities, setActivities] = useState([]);
+    const [feedLoading, setFeedLoading] = useState(true);
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const LIMIT = 10;
+
     const [loading, setLoading] = useState(true);
+    const [preloadedWishlist, setPreloadedWishlist] = useState(null);
 
     useEffect(() => {
         if (user) {
@@ -22,10 +30,28 @@ export default function Dashboard() {
         }
     }, [user]);
 
+    // Background prefetch of my wishlist details
+    useEffect(() => {
+        const myList = wishlists.find(w => w.userId === user?.id);
+        if (myList?.id && !preloadedWishlist) {
+            axios.get(`/api/wishlists/${myList.id}`)
+                .then(res => {
+                    console.log('Wishlist preloaded:', res.data);
+                    setPreloadedWishlist(res.data);
+                })
+                .catch(err => console.error('Background prefetch failed', err));
+        }
+    }, [wishlists, user?.id]);
+
     const fetchDashboardData = async () => {
         setLoading(true);
+        // Start parallel requests
+        const dashboardPromise = axios.get(`/api/dashboard/${user.id}`);
+        // Trigger feed fetch concurrently
+        const feedPromise = fetchFeed(0);
+
         try {
-            const res = await axios.get(`/api/dashboard/${user.id}`);
+            const res = await dashboardPromise;
 
             // 1. Wishlists
             setWishlists(res.data.wishlists || []);
@@ -42,6 +68,30 @@ export default function Dashboard() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const fetchFeed = async (offset) => {
+        if (offset === 0) setFeedLoading(true);
+        try {
+            const res = await axios.get(`/api/feed?userId=${user.id}&limit=${LIMIT}&offset=${offset}`);
+            if (res.data.length < LIMIT) setHasMore(false);
+
+            if (offset === 0) {
+                setActivities(res.data);
+            } else {
+                setActivities(prev => [...prev, ...res.data]);
+            }
+        } catch (err) {
+            console.error('Failed to fetch feed:', err);
+        } finally {
+            setFeedLoading(false);
+        }
+    };
+
+    const loadMoreActivities = () => {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        fetchFeed(nextPage * LIMIT);
     };
 
     const createMyWishlist = async () => {
@@ -128,6 +178,7 @@ export default function Dashboard() {
                     ) : myWishlist ? (
                         <Link
                             to={`/wishlists/${myWishlist.id}`}
+                            state={{ initialData: preloadedWishlist }}
                             className="group block bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 text-white"
                         >
                             <div className="flex items-start justify-between mb-6">
@@ -141,7 +192,7 @@ export default function Dashboard() {
                                     )}
                                 </div>
                                 <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-3 py-1 rounded-full backdrop-blur-sm">
-                                    {myWishlist.items?.length || 0} Items
+                                    {myWishlist._count?.items ?? myWishlist.items?.length ?? 0} Items
                                 </span>
 
                             </div>
@@ -194,7 +245,12 @@ export default function Dashboard() {
                             Activity Feed
                         </h2>
                     </div>
-                    <NewsFeed />
+                    <NewsFeed
+                        activities={activities}
+                        loading={feedLoading}
+                        hasMore={hasMore}
+                        onLoadMore={loadMoreActivities}
+                    />
                 </div>
             )}
 
@@ -307,7 +363,7 @@ export default function Dashboard() {
                                         </div>
                                     )}
                                     <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                                        {list.items?.length || 0} Items
+                                        {list._count?.items ?? list.items?.length ?? 0} Items
                                     </span>
                                 </div>
 

@@ -4,43 +4,8 @@ import axios from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { Gift, ShoppingBag, UserPlus, Clock, RefreshCw } from 'lucide-react';
 
-export default function NewsFeed() {
+export default function NewsFeed({ activities, loading, hasMore, onLoadMore }) {
     const { user } = useAuth();
-    const [activities, setActivities] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [page, setPage] = useState(0);
-    const [hasMore, setHasMore] = useState(true);
-    const LIMIT = 10;
-
-    useEffect(() => {
-        if (user) {
-            fetchFeed(0);
-        }
-    }, [user]);
-
-    const fetchFeed = async (offset) => {
-        if (offset === 0) setLoading(true);
-        try {
-            const res = await axios.get(`/api/feed?userId=${user.id}&limit=${LIMIT}&offset=${offset}`);
-            if (res.data.length < LIMIT) setHasMore(false);
-
-            if (offset === 0) {
-                setActivities(res.data);
-            } else {
-                setActivities(prev => [...prev, ...res.data]);
-            }
-        } catch (err) {
-            console.error('Failed to fetch feed:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadMore = () => {
-        const nextPage = page + 1;
-        setPage(nextPage);
-        fetchFeed(nextPage * LIMIT);
-    };
 
     const formatTime = (dateString) => {
         const date = new Date(dateString);
@@ -137,7 +102,7 @@ export default function NewsFeed() {
 
             {hasMore && (
                 <button
-                    onClick={loadMore}
+                    onClick={onLoadMore}
                     className="w-full py-3 text-slate-500 font-medium hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-colors"
                 >
                     Show Older Activity

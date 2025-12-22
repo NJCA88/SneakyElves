@@ -12,7 +12,8 @@ import ConversationModal from '../components/ConversationModal';
 
 export default function WishlistDetail() {
     const { id } = useParams();
-    const [wishlist, setWishlist] = useState(null);
+    const location = useLocation();
+    const [wishlist, setWishlist] = useState(location.state?.initialData || null);
     const { user, loading: authLoading } = useAuth(); // Assume useAuth provides 'loading'
 
     const [newItem, setNewItem] = useState({ name: '', price: '', url: '', note: '' });
@@ -34,7 +35,6 @@ export default function WishlistDetail() {
     const [shareToken, setShareToken] = useState(null);
     const [shareUrl, setShareUrl] = useState('');
 
-    const location = useLocation();
 
     const fetchWishlist = useCallback(() => {
         const params = new URLSearchParams(location.search);

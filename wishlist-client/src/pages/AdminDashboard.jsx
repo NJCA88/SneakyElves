@@ -35,46 +35,49 @@ export default function AdminDashboard() {
     const [showManualAssignModal, setShowManualAssignModal] = useState(false);
     const [manualAssignments, setManualAssignments] = useState({});
 
+    const [dataFetched, setDataFetched] = useState(false);
+
     useEffect(() => {
-        if (user) {
+        if (user && !dataFetched) {
             fetchData();
         }
-    }, [user, activeTab]);
+    }, [user]);
 
     const fetchData = async () => {
-        if (activeTab === 'text') {
+        if (dataFetched) return;
+        setDataFetched(true);
+
+        setLoading(true);
+
+        // 1. Fetch Groups (Critical Path - wait for this one to at least render groups tab)
+        try {
+            const groupsRes = await axios.get('/api/admin/groups?currentUserId=' + user.id);
+            setGroups(groupsRes.data);
+        } catch (err) {
+            console.error('Failed to fetch groups', err);
+        } finally {
+            // We can stop "blocking" loading as soon as groups are here because that's the default tab
             setLoading(false);
-            return;
         }
 
-        try {
-            setLoading(true);
-            const promises = [
-                axios.get('/api/admin/groups?currentUserId=' + user.id)
-            ];
+        // 2. Fetch Admin Data (Background - don't block UI)
+        if (user.isAdmin) {
+            // Wishlists
+            axios.get('/api/wishlists')
+                .then(res => setWishlists(res.data))
+                .catch(err => console.error('Failed wishlists', err));
 
-            if (user.isAdmin) {
-                promises.push(axios.get('/api/wishlists'));
-                promises.push(axios.get('/api/users?currentUserId=' + user.id));
-                if (activeTab === 'secretsanta') {
-                    promises.push(axios.get('/api/secret-santa/admin/assignments'));
-                }
+            // Users
+            axios.get('/api/users?currentUserId=' + user.id)
+                .then(res => setUsers(res.data))
+                .catch(err => console.error('Failed users', err));
+
+            // Secret Santa
+            if (activeTab === 'secretsanta') {
+                axios.get('/api/secret-santa/admin/assignments')
+                    .then(res => setSecretSantaAssignments(res.data))
+                    .catch(err => console.error('Failed SS', err));
             }
-
-            const results = await Promise.all(promises);
-            setGroups(results[0].data);
-
-            if (user.isAdmin) {
-                setWishlists(results[1].data);
-                setUsers(results[2].data);
-                if (activeTab === 'secretsanta') {
-                    setSecretSantaAssignments(results[3].data);
-                }
-            }
-        } catch (err) {
-            console.error('Fetch data error:', err);
-        } finally {
-            setLoading(false);
         }
     };
 

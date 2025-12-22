@@ -22,6 +22,11 @@ function generateInviteCode() {
     return result;
 }
 
+const logDuration = (label, startTime) => {
+    const duration = Date.now() - startTime;
+    console.log(`[BENCHMARK] ${label}: ${duration}ms`);
+};
+
 app.use(cors());
 app.use(express.json());
 
@@ -620,7 +625,9 @@ app.get('/api/dashboard/:userId', async (req, res) => {
     const uid = parseInt(userId);
 
     try {
+        const reqStart = Date.now();
         // 0. Fetch User & Memberships first to build filters
+        const userStart = Date.now();
         const user = await prisma.user.findUnique({
             where: { id: uid },
             select: {
@@ -630,6 +637,7 @@ app.get('/api/dashboard/:userId', async (req, res) => {
                 }
             }
         });
+        logDuration('Fetch User & Memberships', userStart);
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -653,13 +661,16 @@ app.get('/api/dashboard/:userId', async (req, res) => {
             }
         }
 
+        const queriesStart = Date.now();
         const [wishlists, secretSantaAssignment, secretSantaParticipants] = await Promise.all([
             // 1. Wishlists (Filtered)
             prisma.wishlist.findMany({
                 where: wishlistWhere,
                 include: {
                     user: true,
-                    items: true
+                    _count: {
+                        select: { items: true }
+                    }
                 }
             }),
 
@@ -715,10 +726,7 @@ app.get('/api/dashboard/:userId', async (req, res) => {
                     }
                 });
 
-                return {
-                    santa: assignment, // My target as Santa
-                    elves: myElfAssignments // My targets as Elf
-                };
+                return { santa: assignment, elves: myElfAssignments };
             }),
 
             // 4. Participants
@@ -734,13 +742,17 @@ app.get('/api/dashboard/:userId', async (req, res) => {
                 select: { id: true, name: true }
             })
         ]);
+        logDuration('Fetch Wishlists, SS, & Items', queriesStart);
 
         res.json({
-            wishlists: wishlists,
-            memberships: user.memberships || [],
-            secretSantaAssignment: secretSantaAssignment,
-            // Map participation to just the user objects if that's what frontend expects
-            secretSantaParticipants: secretSantaParticipants // It's already an array of users
+            user: {
+                ...user,
+                memberships: user.memberships
+            },
+            wishlists,
+            memberships: user.memberships, // Deprecated redundant field, keep for compatibility
+            secretSantaAssignment,
+            secretSantaParticipants
         });
 
     } catch (error) {
@@ -1703,8 +1715,7 @@ app.get('/api/wishlists', async (req, res) => {
                             }
                         }
                     }
-                },
-                items: true
+                }
             }
         });
         res.json(wishlists);

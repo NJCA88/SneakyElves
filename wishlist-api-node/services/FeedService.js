@@ -63,7 +63,8 @@ const FeedService = {
      * @param {number} offset 
      */
     async getUserFeed(userId, limit = 20, offset = 0) {
-        return await prisma.feedItem.findMany({
+        const start = Date.now();
+        const feed = await prisma.feedItem.findMany({
             where: { userId: parseInt(userId) },
             orderBy: { createdAt: 'desc' },
             take: limit,
@@ -78,6 +79,9 @@ const FeedService = {
                 }
             }
         });
+        const duration = Date.now() - start;
+        console.log(`[BENCHMARK] Fetch Feed (limit=${limit}, offset=${offset}): ${duration}ms`);
+        return feed;
     },
 
     /**
