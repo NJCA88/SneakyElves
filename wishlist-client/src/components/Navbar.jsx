@@ -17,10 +17,10 @@ export default function Navbar() {
                     {/* Left Side: Logo & Navigation */}
                     <div className="flex items-center gap-8">
                         <Link to="/" className="flex items-center gap-2 group">
-                            <div className="bg-indigo-600 p-2 rounded-lg text-white group-hover:bg-indigo-700 transition-colors">
-                                <Gift size={20} />
+                            <div className="bg-white p-1 rounded-lg shadow-sm group-hover:rotate-12 transition-transform duration-300 border border-slate-100">
+                                <img src="/elf_icon.jpg" alt="SneakyElves Logo" className="w-8 h-8 object-cover rounded-md" />
                             </div>
-                            <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+                            <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent hidden sm:block">
                                 SneakyElves
                             </span>
                         </Link>
