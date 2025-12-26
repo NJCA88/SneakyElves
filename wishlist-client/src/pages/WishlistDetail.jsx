@@ -289,7 +289,8 @@ export default function WishlistDetail() {
             const res = await axios.post(`/api/wishlists/${id}/share`, { userId: user.id });
             const token = res.data.shareToken;
             setShareToken(token);
-            setShareUrl(`${window.location.origin}/wishlists/${id}?shareToken=${token}`);
+            const baseUrl = window.location.hostname === 'localhost' ? window.location.origin : 'https://sneakyelves.com';
+            setShareUrl(`${baseUrl}/wishlists/${id}?shareToken=${token}`);
         } catch (err) {
             console.error('Failed to generate share link', err);
         }

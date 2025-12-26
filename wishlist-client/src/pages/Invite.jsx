@@ -36,7 +36,8 @@ export default function Invite() {
     };
 
     const copyInviteLink = async (group) => {
-        const link = `${window.location.origin}/signup?invite=${group.inviteCode}`;
+        const baseUrl = window.location.hostname === 'localhost' ? window.location.origin : 'https://sneakyelves.com';
+        const link = `${baseUrl}/signup?invite=${group.inviteCode}`;
         try {
             await navigator.clipboard.writeText(link);
             setCopiedMap(prev => ({ ...prev, [group.id]: true }));
