@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Gift, LogOut, User, LogIn, LayoutDashboard, Settings, UserPlus, Bell, Check, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useNotifications } from '../context/NotificationContext';
+import ImpersonationBanner from './ImpersonationBanner';
 
 export default function Navbar() {
     const { user, logout } = useAuth();
@@ -12,6 +13,7 @@ export default function Navbar() {
 
     return (
         <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-200">
+            <ImpersonationBanner />
             <div className="container mx-auto px-4">
                 <div className="flex justify-between items-center h-16">
                     {/* Left Side: Logo & Navigation */}

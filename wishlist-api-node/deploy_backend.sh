@@ -17,13 +17,8 @@ SERVICE_NAME="wishlist-api"
 echo "👉 Using Project: $PROJECT_ID"
 echo "👉 Using Region: $REGION"
 
-# DATABASE_URL from .env.prod
-DATABASE_URL="postgresql://postgres:Nuttybarc0ach@db.ywujfusltkujhqtumvlh.supabase.co:5432/postgres"
-
-if [ -z "$DATABASE_URL" ]; then
-    echo "❌ Database URL is required."
-    exit 1
-fi
+# DATABASE_URL is NOT set here. It lives only in the Cloud Run service settings
+# (Neon). Deploys keep the existing value via --update-env-vars below.
 
 echo "🏗  Submitting build to Cloud Build..."
 gcloud builds submit --tag gcr.io/$PROJECT_ID/$SERVICE_NAME --project $PROJECT_ID
@@ -38,6 +33,6 @@ gcloud run deploy $SERVICE_NAME \
   --min-instances 0 \
   --timeout 300 \
   --cpu-boost \
-  --set-env-vars DATABASE_URL="$DATABASE_URL",GOOGLE_CLIENT_ID="496031209257-7kjroq2tihte2mc8a29slolbi75ukcn7.apps.googleusercontent.com"
+  --update-env-vars GOOGLE_CLIENT_ID="496031209257-7kjroq2tihte2mc8a29slolbi75ukcn7.apps.googleusercontent.com"
 
 echo "✅ Deployment complete!"

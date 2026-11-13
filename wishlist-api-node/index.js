@@ -1521,6 +1521,40 @@ app.get('/api/groups/validate/:code', async (req, res) => {
     }
 });
 
+// Admin "Login as": returns another user's session payload so an admin can
+// view the site as that user (for testing). Only system admins may use it.
+app.post('/api/admin/impersonate', async (req, res) => {
+    const { adminId, targetUserId } = req.body;
+    try {
+        const admin = await prisma.user.findUnique({
+            where: { id: parseInt(adminId) },
+            select: { id: true, isAdmin: true }
+        });
+        if (!admin || !admin.isAdmin) {
+            return res.status(403).json({ error: 'Only admins can log in as other users' });
+        }
+
+        const target = await prisma.user.findUnique({
+            where: { id: parseInt(targetUserId) },
+            include: {
+                memberships: {
+                    include: { group: true }
+                }
+            }
+        });
+        if (!target) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        console.log(`[Impersonate] Admin ${admin.id} is now acting as user ${target.id}`);
+        const { password: _, ...userWithoutPassword } = target;
+        res.json({ user: userWithoutPassword });
+    } catch (error) {
+        console.error('Impersonation error:', error);
+        res.status(500).json({ error: 'Failed to log in as user' });
+    }
+});
+
 app.put('/api/admin/users/:userId/system-role', async (req, res) => {
     const { userId } = req.params;
     const { isAdmin } = req.body;
