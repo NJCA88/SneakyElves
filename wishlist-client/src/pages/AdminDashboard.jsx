@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from '../api/axios';
-import { LayoutDashboard, Trash2, Edit2, User, Gift, X, Check, Snowflake, FileText } from 'lucide-react';
+import { LayoutDashboard, Trash2, Edit2, User, Gift, X, Check, Snowflake, FileText, LogIn } from 'lucide-react';
 import { ReceiversView, GiversView } from '../components/AssignmentViews';
 
 import { useAuth } from '../context/AuthContext';
@@ -10,7 +11,11 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import AdminTextUpdates from '../components/AdminTextUpdates';
 
 export default function AdminDashboard() {
-    const { user } = useAuth();
+    const { user, startImpersonation } = useAuth();
+    const navigate = useNavigate();
+    const [loginAsTarget, setLoginAsTarget] = useState(null);
+    const [loginAsError, setLoginAsError] = useState('');
+    const [loggingInAs, setLoggingInAs] = useState(false);
     const [activeTab, setActiveTab] = useState('groups');
     const [selectedUserForGroupEdit, setSelectedUserForGroupEdit] = useState(null);
     const [selectedGroupForEdit, setSelectedGroupForEdit] = useState(null);
@@ -135,6 +140,22 @@ export default function AdminDashboard() {
         catch { alert('Failed reset'); }
     };
 
+    const handleConfirmLoginAs = async () => {
+        if (!loginAsTarget) return;
+        setLoggingInAs(true);
+        setLoginAsError('');
+        try {
+            const res = await axios.post('/api/admin/impersonate', { adminId: user.id, targetUserId: loginAsTarget.id });
+            setLoginAsTarget(null);
+            startImpersonation(res.data.user);
+            navigate('/');
+        } catch (err) {
+            setLoginAsError(err.response?.data?.error || 'Could not log in as this user');
+        } finally {
+            setLoggingInAs(false);
+        }
+    };
+
     if (loading && activeTab !== 'text') return <div className="text-center py-12">Loading...</div>;
 
     const tabs = [
@@ -158,6 +179,26 @@ export default function AdminDashboard() {
                         <div className="flex justify-end gap-2">
                             <button onClick={() => setDeleteConfirmation(null)} className="px-4 py-2 hover:bg-slate-100 rounded">Cancel</button>
                             <button onClick={handleConfirmDelete} className="px-4 py-2 bg-red-600 text-white rounded">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {loginAsTarget && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full">
+                        <h3 className="font-bold mb-2">Log in as {loginAsTarget.name}?</h3>
+                        <p className="mb-2 text-slate-600">
+                            You'll see the site exactly as <strong>{loginAsTarget.name}</strong> ({loginAsTarget.email}) does.
+                        </p>
+                        <p className="mb-4 text-sm text-slate-500">
+                            Anything you do (adding items, marking gifts as purchased, messages) will be done as them. Use the yellow bar at the top to switch back.
+                        </p>
+                        {loginAsError && <p className="mb-4 text-sm text-red-600">{loginAsError}</p>}
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => { setLoginAsTarget(null); setLoginAsError(''); }} className="px-4 py-2 hover:bg-slate-100 rounded">Cancel</button>
+                            <button onClick={handleConfirmLoginAs} disabled={loggingInAs} className="px-4 py-2 bg-yellow-400 text-yellow-950 font-medium rounded hover:bg-yellow-300 disabled:opacity-50">
+                                {loggingInAs ? 'Logging in…' : `Log in as ${loginAsTarget.name}`}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -304,6 +345,11 @@ export default function AdminDashboard() {
                                             <input type="checkbox" checked={u.isAdmin || false} onChange={() => handleToggleSystemRole(u.id, u.isAdmin)} disabled={u.id === user.id} />
                                         </td>
                                         <td className="px-6 py-4 flex gap-2">
+                                            {u.id !== user.id && (
+                                                <button onClick={() => setLoginAsTarget(u)} className="flex items-center gap-1 text-yellow-800 bg-yellow-100 hover:bg-yellow-200 text-sm border border-yellow-300 px-2 rounded" title={`Log in as ${u.name}`}>
+                                                    <LogIn size={14} /> Login as
+                                                </button>
+                                            )}
                                             <button onClick={() => setPasswordResetUser(u)} className="text-blue-600 text-sm border px-2 rounded">Pass</button>
                                             <button onClick={() => confirmDeleteUser(u.id)} className="text-red-600"><Trash2 size={16} /></button>
                                             <button onClick={() => setSelectedUserForGroupEdit(u)} className="text-indigo-600"><Edit2 size={16} /></button>
