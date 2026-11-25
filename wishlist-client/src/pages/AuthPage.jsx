@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { Loader2 } from 'lucide-react';
@@ -17,6 +17,10 @@ export default function AuthPage({ initialMode = 'login' }) {
     const [groupName, setGroupName] = useState(null);
 
     const [mode, setMode] = useState(initialMode); // email form: 'login' | 'signup'
+    // Google is the strongly preferred path: the email form stays collapsed
+    // until someone explicitly asks for it.
+    const [showEmail, setShowEmail] = useState(false);
+    const emailInputRef = useRef(null);
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -83,6 +87,10 @@ export default function AuthPage({ initialMode = 'login' }) {
         }
     };
 
+    useEffect(() => {
+        if (showEmail) emailInputRef.current?.focus();
+    }, [showEmail]);
+
     const switchMode = () => {
         setMode(m => (m === 'login' ? 'signup' : 'login'));
         setError('');
@@ -121,56 +129,65 @@ export default function AuthPage({ initialMode = 'login' }) {
                 </div>
                 <p className="text-center text-xs text-slate-400 mt-3">New here? Google creates your account automatically.</p>
 
-                <div className="my-7 flex items-center">
-                    <div className="flex-grow border-t border-slate-200"></div>
-                    <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">or use email</span>
-                    <div className="flex-grow border-t border-slate-200"></div>
-                </div>
-
-                {/* Secondary: email + password */}
-                <form className="space-y-4" onSubmit={handleEmailSubmit}>
-                    {mode === 'signup' && (
-                        <div>
-                            <label htmlFor="auth-name" className="block text-sm font-medium text-slate-700 mb-1.5">Full name</label>
-                            <input id="auth-name" type="text" value={name} onChange={e => setName(e.target.value)}
-                                className={inputClass} placeholder="Alice Smith" autoComplete="name" disabled={isSubmitting} />
-                        </div>
-                    )}
-                    <div>
-                        <label htmlFor="auth-email" className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-                        <input id="auth-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
-                            className={inputClass} placeholder="you@example.com" autoComplete="email" disabled={isSubmitting} />
+                {!showEmail ? (
+                    <div className="mt-8 text-center">
+                        <button
+                            type="button"
+                            onClick={() => setShowEmail(true)}
+                            aria-expanded="false"
+                            className="text-sm text-slate-400 hover:text-slate-600 hover:underline underline-offset-4 transition-colors"
+                        >
+                            or continue with email and password
+                        </button>
                     </div>
-                    <div>
-                        <label htmlFor="auth-password" className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
-                        <input id="auth-password" type="password" value={password} onChange={e => setPassword(e.target.value)}
-                            className={inputClass} placeholder="••••••••"
-                            autoComplete={mode === 'login' ? 'current-password' : 'new-password'} disabled={isSubmitting} />
-                    </div>
-                    {mode === 'signup' && !groupName && (
+                ) : (
+                    <div className="mt-7 pt-7 border-t border-slate-200">
+                    {/* Secondary: email + password */}
+                    <form className="space-y-4" onSubmit={handleEmailSubmit}>
+                        {mode === 'signup' && (
+                            <div>
+                                <label htmlFor="auth-name" className="block text-sm font-medium text-slate-700 mb-1.5">Full name</label>
+                                <input id="auth-name" type="text" value={name} onChange={e => setName(e.target.value)}
+                                    className={inputClass} placeholder="Alice Smith" autoComplete="name" disabled={isSubmitting} />
+                            </div>
+                        )}
                         <div>
-                            <label htmlFor="auth-invite" className="block text-sm font-medium text-slate-700 mb-1.5">Group invite code <span className="text-slate-400 font-normal">(optional)</span></label>
-                            <input id="auth-invite" type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())}
-                                className={`${inputClass} uppercase tracking-widest`} placeholder="ABC123" maxLength={6} disabled={isSubmitting} />
+                            <label htmlFor="auth-email" className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+                            <input id="auth-email" ref={emailInputRef} type="email" value={email} onChange={e => setEmail(e.target.value)}
+                                className={inputClass} placeholder="you@example.com" autoComplete="email" disabled={isSubmitting} />
                         </div>
-                    )}
-                    <button
-                        type="submit"
-                        disabled={!canSubmit || isSubmitting}
-                        className="w-full py-3 rounded-xl font-semibold border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-400 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isSubmitting
-                            ? <><Loader2 className="animate-spin mr-2" size={18} /> {mode === 'login' ? 'Logging in…' : 'Creating account…'}</>
-                            : (mode === 'login' ? 'Log in with email' : 'Create account with email')}
-                    </button>
-                </form>
+                        <div>
+                            <label htmlFor="auth-password" className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                            <input id="auth-password" type="password" value={password} onChange={e => setPassword(e.target.value)}
+                                className={inputClass} placeholder="••••••••"
+                                autoComplete={mode === 'login' ? 'current-password' : 'new-password'} disabled={isSubmitting} />
+                        </div>
+                        {mode === 'signup' && !groupName && (
+                            <div>
+                                <label htmlFor="auth-invite" className="block text-sm font-medium text-slate-700 mb-1.5">Group invite code <span className="text-slate-400 font-normal">(optional)</span></label>
+                                <input id="auth-invite" type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                                    className={`${inputClass} uppercase tracking-widest`} placeholder="ABC123" maxLength={6} disabled={isSubmitting} />
+                            </div>
+                        )}
+                        <button
+                            type="submit"
+                            disabled={!canSubmit || isSubmitting}
+                            className="w-full py-3 rounded-xl font-semibold border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-400 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isSubmitting
+                                ? <><Loader2 className="animate-spin mr-2" size={18} /> {mode === 'login' ? 'Logging in…' : 'Creating account…'}</>
+                                : (mode === 'login' ? 'Log in with email' : 'Create account with email')}
+                        </button>
+                    </form>
 
-                <p className="mt-6 text-center text-sm text-slate-500">
-                    {mode === 'login' ? 'New here? ' : 'Already have an account? '}
-                    <button type="button" onClick={switchMode} className="text-indigo-600 font-semibold hover:text-indigo-700 hover:underline">
-                        {mode === 'login' ? 'Create an account with email' : 'Log in instead'}
-                    </button>
-                </p>
+                    <p className="mt-6 text-center text-sm text-slate-500">
+                        {mode === 'login' ? 'New here? ' : 'Already have an account? '}
+                        <button type="button" onClick={switchMode} className="text-indigo-600 font-semibold hover:text-indigo-700 hover:underline">
+                            {mode === 'login' ? 'Create an account with email' : 'Log in instead'}
+                        </button>
+                    </p>
+                    </div>
+                )}
             </div>
         </div>
     );
