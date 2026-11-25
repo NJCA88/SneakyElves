@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from '../api/axios';
 import { LayoutDashboard, Trash2, Edit2, User, Gift, X, Check, Snowflake, FileText, LogIn } from 'lucide-react';
@@ -27,6 +27,10 @@ export default function AdminDashboard() {
     const [editTitle, setEditTitle] = useState('');
     const [loading, setLoading] = useState(true);
     const [deleteConfirmation, setDeleteConfirmation] = useState(null);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState('');
+    const [toast, setToast] = useState(null);
+    const toastTimer = useRef(null);
     const [secretSantaAssignments, setSecretSantaAssignments] = useState([]);
     const [selectedUsers, setSelectedUsers] = useState([]);
     const [creatingAssignments, setCreatingAssignments] = useState(false);
@@ -49,10 +53,10 @@ export default function AdminDashboard() {
     }, [user]);
 
     const fetchData = async () => {
-        if (dataFetched) return;
+        const isFirstLoad = !dataFetched;
         setDataFetched(true);
 
-        setLoading(true);
+        if (isFirstLoad) setLoading(true);
 
         // 1. Fetch Groups (Critical Path - wait for this one to at least render groups tab)
         try {
@@ -89,20 +93,54 @@ export default function AdminDashboard() {
     // ... (Keep existing helper functions like delete, save, etc. - I will simplify for brevity in this replace, assuming standard impl or re-copy if needed. 
     // actually, I'll copy the critical ones back in. Since I am replacing the whole file content effectively, I need to be careful.)
 
-    const confirmDeleteWishlist = (id) => {
-        setDeleteConfirmation({ type: 'wishlist', id, message: 'Delete this wishlist?' });
+    const showToast = (message) => {
+        setToast(message);
+        clearTimeout(toastTimer.current);
+        toastTimer.current = setTimeout(() => setToast(null), 3500);
     };
-    const confirmDeleteUser = (id) => {
-        setDeleteConfirmation({ type: 'user', id, message: 'Delete this user?' });
+    const confirmDeleteWishlist = (list) => {
+        setDeleteError('');
+        setDeleteConfirmation({
+            type: 'wishlist', id: list.id, name: list.title,
+            title: `Delete "${list.title}"?`,
+            message: 'This also deletes its items and any questions about them. This can\'t be undone.'
+        });
+    };
+    const confirmDeleteUser = (u) => {
+        setDeleteError('');
+        setDeleteConfirmation({
+            type: 'user', id: u.id, name: u.name,
+            title: `Delete ${u.name}?`,
+            message: `This permanently deletes ${u.email ? u.email + ', ' : ''}their wishlist, items, messages and group memberships. This can't be undone.`
+        });
+    };
+    const closeDeleteConfirmation = () => {
+        if (deleting) return;
+        setDeleteConfirmation(null);
+        setDeleteError('');
     };
     const handleConfirmDelete = async () => {
-        if (!deleteConfirmation) return;
+        if (!deleteConfirmation || deleting) return;
+        const { type, id, name } = deleteConfirmation;
+        setDeleting(true);
+        setDeleteError('');
         try {
-            if (deleteConfirmation.type === 'wishlist') await axios.delete(`/api/wishlists/${deleteConfirmation.id}`);
-            else if (deleteConfirmation.type === 'user') await axios.delete(`/api/users/${deleteConfirmation.id}`);
-            fetchData();
+            if (type === 'wishlist') {
+                await axios.delete(`/api/wishlists/${id}`);
+                setWishlists(prev => prev.filter(w => w.id !== id));
+            } else if (type === 'user') {
+                await axios.delete(`/api/users/${id}`);
+                setUsers(prev => prev.filter(x => x.id !== id));
+                setWishlists(prev => prev.filter(w => w.userId !== id));
+            }
             setDeleteConfirmation(null);
-        } catch (err) { alert('Failed to delete'); }
+            showToast(`Deleted ${name}`);
+            fetchData(); // refresh counts elsewhere (groups etc.) in the background
+        } catch (err) {
+            setDeleteError(err.response?.data?.error || 'Delete failed. Please try again.');
+        } finally {
+            setDeleting(false);
+        }
     };
     const startEditWishlist = (list) => { setEditingWishlist(list.id); setEditTitle(list.title); };
     const cancelEdit = () => { setEditingWishlist(null); setEditTitle(''); };
@@ -172,15 +210,24 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto space-y-8 relative">
             {/* ... Modals (keep generic) ... */}
             {deleteConfirmation && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm">
-                        <h3 className="font-bold mb-2">Confirm</h3>
-                        <p className="mb-4">{deleteConfirmation.message}</p>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeDeleteConfirmation}>
+                    <div role="dialog" aria-modal="true" className="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-bold mb-2">{deleteConfirmation.title}</h3>
+                        <p className="mb-4 text-slate-600">{deleteConfirmation.message}</p>
+                        {deleteError && <p className="mb-4 text-sm text-red-600">{deleteError}</p>}
                         <div className="flex justify-end gap-2">
-                            <button onClick={() => setDeleteConfirmation(null)} className="px-4 py-2 hover:bg-slate-100 rounded">Cancel</button>
-                            <button onClick={handleConfirmDelete} className="px-4 py-2 bg-red-600 text-white rounded">Delete</button>
+                            <button onClick={closeDeleteConfirmation} disabled={deleting} className="px-4 py-2 rounded-lg text-slate-700 hover:bg-slate-100 active:bg-slate-200 transition-colors disabled:opacity-50">Cancel</button>
+                            <button onClick={handleConfirmDelete} disabled={deleting} className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 active:bg-red-800 shadow-sm hover:shadow transition-colors disabled:opacity-60 disabled:cursor-wait">
+                                {deleting ? 'Deleting…' : 'Delete'}
+                            </button>
                         </div>
                     </div>
+                </div>
+            )}
+            {toast && (
+                <div role="status" className="fixed bottom-6 right-6 z-[60] flex items-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-3 shadow-lg">
+                    <Check size={18} />
+                    <span className="font-medium">{toast}</span>
                 </div>
             )}
             {loginAsTarget && (
@@ -351,8 +398,8 @@ export default function AdminDashboard() {
                                                 </button>
                                             )}
                                             <button onClick={() => setPasswordResetUser(u)} className="text-blue-600 text-sm border px-2 rounded">Pass</button>
-                                            <button onClick={() => confirmDeleteUser(u.id)} className="text-red-600"><Trash2 size={16} /></button>
-                                            <button onClick={() => setSelectedUserForGroupEdit(u)} className="text-indigo-600"><Edit2 size={16} /></button>
+                                            <button onClick={() => confirmDeleteUser(u)} title={`Delete ${u.name}`} aria-label={`Delete ${u.name}`} className="p-1.5 rounded-md transition-colors text-red-600 hover:bg-red-50 hover:text-red-700"><Trash2 size={16} /></button>
+                                            <button onClick={() => setSelectedUserForGroupEdit(u)} title={`Edit ${u.name}'s groups`} aria-label={`Edit ${u.name}'s groups`} className="p-1.5 rounded-md transition-colors text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"><Edit2 size={16} /></button>
                                         </td>
                                     </tr>
                                 ))}
@@ -379,8 +426,8 @@ export default function AdminDashboard() {
                                     <td className="px-6 py-4">{list.user?.name}</td>
                                     <td className="px-6 py-4 flex gap-2">
                                         {editingWishlist === list.id
-                                            ? <><button onClick={() => saveWishlist(list.id)}><Check size={16} /></button><button onClick={cancelEdit}><X size={16} /></button></>
-                                            : <><button onClick={() => startEditWishlist(list)}><Edit2 size={16} /></button><button onClick={() => confirmDeleteWishlist(list.id)}><Trash2 size={16} /></button></>
+                                            ? <><button onClick={() => saveWishlist(list.id)} title="Save" aria-label="Save" className="p-1.5 rounded-md transition-colors text-emerald-600 hover:bg-emerald-50"><Check size={16} /></button><button onClick={cancelEdit} title="Cancel" aria-label="Cancel" className="p-1.5 rounded-md transition-colors text-slate-500 hover:bg-slate-100"><X size={16} /></button></>
+                                            : <><button onClick={() => startEditWishlist(list)} title="Rename" aria-label="Rename" className="p-1.5 rounded-md transition-colors text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"><Edit2 size={16} /></button><button onClick={() => confirmDeleteWishlist(list)} title={`Delete ${list.title}`} aria-label={`Delete ${list.title}`} className="p-1.5 rounded-md transition-colors text-red-600 hover:bg-red-50 hover:text-red-700"><Trash2 size={16} /></button></>
                                         }
                                     </td>
                                 </tr>
