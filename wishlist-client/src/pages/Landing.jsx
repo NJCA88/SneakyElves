@@ -43,21 +43,15 @@ export default function Landing() {
                 {/* CTAs */}
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
                     <Link
-                        to="/signup"
+                        to="/continue"
                         className="group relative px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-indigo-200 hover:shadow-2xl hover:shadow-indigo-300 transition-all duration-300 hover:-translate-y-1 overflow-hidden"
                     >
                         <span className="relative z-10 flex items-center gap-2">
-                            Signup
+                            Continue
                             <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
                         </span>
                     </Link>
 
-                    <Link
-                        to="/login"
-                        className="px-8 py-4 text-slate-600 hover:text-indigo-700 font-medium rounded-2xl hover:bg-white transition-all border border-slate-200 hover:border-indigo-100"
-                    >
-                        Login
-                    </Link>
                 </div>
 
                 {/* Social Proof / Stats Lite */}

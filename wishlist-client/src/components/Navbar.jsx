@@ -40,21 +40,15 @@ export default function Navbar() {
                                 <UserMenu user={user} logout={logout} />
                             </>
                         ) : (
-                            <div className="flex items-center gap-3">
+                            !['/continue', '/login', '/signup'].includes(location.pathname) && (
                                 <Link
-                                    to="/login"
-                                    className={`text-sm font-medium transition-colors ${isActive('/login') ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}
-                                >
-                                    Login
-                                </Link>
-                                <Link
-                                    to="/signup"
+                                    to="/continue"
                                     className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-indigo-700 transition-all shadow-sm hover:shadow-md"
                                 >
                                     <LogIn size={16} />
-                                    Sign Up
+                                    Continue
                                 </Link>
-                            </div>
+                            )
                         )}
                     </div>
                 </div>

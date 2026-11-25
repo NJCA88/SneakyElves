@@ -5,8 +5,7 @@ import Navbar from './components/Navbar';
 import LoadingSpinner from './components/LoadingSpinner';
 
 // Lazy load pages
-const Login = lazy(() => import('./pages/Login'));
-const Signup = lazy(() => import('./pages/Signup'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Invite = lazy(() => import('./pages/Invite'));
 const WishlistDetail = lazy(() => import('./pages/WishlistDetail'));
@@ -17,7 +16,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex justify-center items-center h-screen">Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/continue" replace />;
   return children;
 };
 
@@ -48,8 +47,10 @@ function App() {
             <div className="container mx-auto px-4 py-8">
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/signup" element={<Signup />} />
+                  <Route path="/continue" element={<AuthPage />} />
+                  {/* Old links (invites, bookmarks) still work */}
+                  <Route path="/login" element={<AuthPage />} />
+                  <Route path="/signup" element={<AuthPage initialMode="signup" />} />
 
                   {/* Root Route logic handled by HomeRoute */}
                   <Route path="/" element={<HomeRoute />} />
