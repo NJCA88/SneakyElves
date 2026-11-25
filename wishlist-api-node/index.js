@@ -1090,38 +1090,66 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
 
 
 app.delete('/api/users/:id', async (req, res) => {
-    const { id } = req.params;
+    const userId = parseInt(req.params.id);
+    if (Number.isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user id' });
+    }
+
     try {
-        const userId = parseInt(id);
+        // Remove everything that references this user, then the user, in one
+        // transaction: either the whole delete succeeds or nothing changes.
+        await prisma.$transaction(async (tx) => {
+            const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
+            if (!user) {
+                const err = new Error('User not found');
+                err.status = 404;
+                throw err;
+            }
 
-        // Find all wishlists for this user
-        const userWishlists = await prisma.wishlist.findMany({
-            where: { userId: userId },
-            select: { id: true }
-        });
+            const wishlistIds = (await tx.wishlist.findMany({
+                where: { userId },
+                select: { id: true }
+            })).map(w => w.id);
 
-        const wishlistIds = userWishlists.map(w => w.id);
-
-        // Delete all items in user's wishlists
-        if (wishlistIds.length > 0) {
-            await prisma.item.deleteMany({
-                where: { wishlistId: { in: wishlistIds } }
+            // Conversations: on this user's wishlists, or started by this user
+            // anywhere. Their messages are removed by the cascade on Message.
+            await tx.conversation.deleteMany({
+                where: {
+                    OR: [
+                        { wishlistId: { in: wishlistIds } },
+                        { authorId: userId }
+                    ]
+                }
             });
+            // Messages this user wrote in other people's conversations.
+            await tx.message.deleteMany({ where: { authorId: userId } });
 
-            // Delete all wishlists
-            await prisma.wishlist.deleteMany({
-                where: { userId: userId }
-            });
-        }
+            // Invite links to this user's wishlists (their group links are
+            // removed automatically with them).
+            await tx.wishlistInvite.deleteMany({ where: { wishlistId: { in: wishlistIds } } });
 
-        // Finally delete the user
-        await prisma.user.delete({
-            where: { id: userId }
-        });
+            await tx.item.deleteMany({ where: { wishlistId: { in: wishlistIds } } });
+            await tx.wishlist.deleteMany({ where: { userId } });
+
+            // Gifts this user marked as purchased on other people's lists keep
+            // their purchased status, but no longer point at a deleted user.
+            await tx.item.updateMany({ where: { purchasedBy: userId }, data: { purchasedBy: null } });
+
+            await tx.groupMembership.deleteMany({ where: { userId } });
+            await tx.notification.deleteMany({ where: { userId } });
+            await tx.feedItem.deleteMany({ where: { OR: [{ userId }, { actorId: userId }] } });
+            await tx.secretSanta.deleteMany({ where: { OR: [{ giverId: userId }, { receiverId: userId }] } });
+
+            await tx.user.delete({ where: { id: userId } });
+        }, { timeout: 15000 });
+
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
+        if (error.status === 404) {
+            return res.status(404).json({ error: 'User not found' });
+        }
         console.error('Error deleting user:', error);
-        res.status(400).json({ error: 'Failed to delete user' });
+        res.status(500).json({ error: 'Failed to delete user' });
     }
 });
 
@@ -1186,17 +1214,15 @@ app.put('/api/wishlists/:id', async (req, res) => {
 });
 
 app.delete('/api/wishlists/:id', async (req, res) => {
-    const { id } = req.params;
+    const wishlistId = parseInt(req.params.id);
     try {
-        // Delete all items in the wishlist first
-        await prisma.item.deleteMany({
-            where: { wishlistId: parseInt(id) }
-        });
-
-        // Then delete the wishlist
-        await prisma.wishlist.delete({
-            where: { id: parseInt(id) }
-        });
+        await prisma.$transaction([
+            // Conversations about this list (messages cascade with them)
+            prisma.conversation.deleteMany({ where: { wishlistId } }),
+            prisma.wishlistInvite.deleteMany({ where: { wishlistId } }),
+            prisma.item.deleteMany({ where: { wishlistId } }),
+            prisma.wishlist.delete({ where: { id: wishlistId } })
+        ]);
         res.json({ message: 'Wishlist deleted successfully' });
     } catch (error) {
         console.error('Error deleting wishlist:', error);
@@ -1245,9 +1271,12 @@ app.put('/api/items/:id', async (req, res) => {
 app.delete('/api/items/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        await prisma.item.delete({
-            where: { id: parseInt(id) }
-        });
+        const itemId = parseInt(id);
+        await prisma.$transaction([
+            // Conversations about this item (messages cascade with them)
+            prisma.conversation.deleteMany({ where: { itemId } }),
+            prisma.item.delete({ where: { id: itemId } })
+        ]);
         res.json({ message: 'Item deleted successfully' });
     } catch (error) {
         console.error('Error deleting item:', error);
