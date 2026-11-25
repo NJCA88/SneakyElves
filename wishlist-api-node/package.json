@@ -5,7 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "reset": "prisma migrate reset --force",
-    "start": "node index.js"
+    "start": "node index.js",
+    "db:sync": "prisma db push --schema prisma/schema.prod.prisma --skip-generate"
   },
   "keywords": [],
   "author": "",
