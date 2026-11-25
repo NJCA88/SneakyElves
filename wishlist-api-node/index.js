@@ -445,6 +445,9 @@ app.post('/api/wishlists', async (req, res) => {
         const user = await prisma.user.findUnique({
             where: { id: userId }
         });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
 
         const wishlist = await prisma.wishlist.create({
             data: {

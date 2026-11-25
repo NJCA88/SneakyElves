@@ -7,7 +7,7 @@ import NewsFeed from '../components/NewsFeed';
 
 export default function Dashboard() {
     const [wishlists, setWishlists] = useState([]);
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const [creating, setCreating] = useState(false);
     const [secretSantaAssignment, setSecretSantaAssignment] = useState(null);
     const [secretSantaParticipants, setSecretSantaParticipants] = useState([]);
@@ -64,6 +64,13 @@ export default function Dashboard() {
             setSecretSantaParticipants(res.data.secretSantaParticipants || []);
 
         } catch (err) {
+            // The saved login points at an account that no longer exists
+            // (e.g. it was deleted, or the database was replaced): sign out
+            // instead of showing a broken dashboard.
+            if (err.response?.status === 404) {
+                logout();
+                return;
+            }
             console.error('Error fetching dashboard data:', err);
         } finally {
             setLoading(false);
