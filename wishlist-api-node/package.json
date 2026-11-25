@@ -6,7 +6,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "reset": "prisma migrate reset --force",
     "start": "node index.js",
-    "db:sync": "prisma db push --schema prisma/schema.prod.prisma --skip-generate"
+    "db:sync": "prisma db push --schema prisma/schema.prod.prisma --skip-generate",
+    "dev": "node scripts/check-dev-env.js && node --watch index.js",
+    "dev:setup": "node scripts/check-dev-env.js && prisma generate --schema prisma/schema.prod.prisma && prisma db push --schema prisma/schema.prod.prisma --skip-generate && node prisma/seed-dev.js"
   },
   "keywords": [],
   "author": "",

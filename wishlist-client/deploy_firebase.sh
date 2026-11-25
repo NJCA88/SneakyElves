@@ -1,23 +1,16 @@
 #!/bin/bash
-echo "🚀 Starting Firebase Deployment Setup..."
+# Build the site with .env.production and deploy it to Firebase Hosting.
+set -euo pipefail
+cd "$(dirname "$0")"
 
-# Set PATH to include Node.js
-# Set PATH to include Node.js
-# export PATH=/Users/chriszou/.gemini/antigravity/scratch/wishlist_app/node-v22.12.0-darwin-arm64/bin:$PATH
-
-# Navigate to the client directory
-cd "/Users/chriszou/Desktop/antigravity projects/wishlist_app/wishlist-client"
-
-# echo "🔑 Please log in to Firebase:"
-# npx firebase login
-
-# echo "🛠  Initializing Firebase project..."
-# npx firebase init hosting
-
-echo "🏗  Building the project..."
+echo "🏗  Building..."
+npm ci --silent
 npm run build
 
-echo "🚀 Deploying to Firebase..."
-npx firebase deploy --only hosting
+echo "🚀 Deploying to Firebase Hosting..."
+# Bill API calls to the Firebase project itself (Cloud Shell otherwise uses
+# "allmygifts", where the Firebase Management API is disabled).
+CLOUDSDK_CORE_PROJECT=wishlist-app-416ee GOOGLE_CLOUD_QUOTA_PROJECT=wishlist-app-416ee \
+  npx -y firebase-tools deploy --only hosting --project wishlist-app-416ee
 
 echo "✅ Deployment complete!"

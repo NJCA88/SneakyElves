@@ -9,3 +9,6 @@ coverage
 .idea
 .firebase
 node-v*
+# Client build settings: public values only (API URL, Google client ID), safe to commit
+!wishlist-client/.env.development
+!wishlist-client/.env.production
